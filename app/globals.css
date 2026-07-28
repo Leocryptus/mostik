@@ -1,0 +1,147 @@
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────────
+   Мостик · стиль «Токио, ночь» — утверждён 27.07
+   Канон: ТЗ §18. Штриховка как способ показать
+   разрыв отклонена — не возвращать.
+   ───────────────────────────────────────────── */
+
+:root {
+  /* база */
+  --bg: #070c12;        /* не чистый чёрный: он смазывается на OLED при скролле */
+  --card: #0b1117;
+  --card-2: #0e1720;
+  --line: #16222e;
+  --line-soft: #13202b;
+  --txt: #e8f4f8;
+  --muted: #7d93a1;
+  --dim: #546b7c;
+
+  /* семь сигналов — цвет всегда в паре с формой */
+  --s-ok: #22d3ee;      /* в графике */
+  --s-over: #34d399;    /* перевыполнено */
+  --s-behind: #fbbf24;  /* отстаём */
+  --s-gap: #ff2e88;     /* разрыв: план и факт разошлись */
+  --s-dead: #f43f5e;    /* тишина */
+  --s-frozen: #818cf8;  /* заморожено */
+  --s-none: #64748b;    /* нет цифры */
+
+  /* типографика */
+  --sans: -apple-system, "Helvetica Neue", BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+
+  /* сетка */
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 20px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--txt);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* амбиентное свечение: бирюза слева, розовый справа */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -180px 0 auto 0;
+  height: 420px;
+  background:
+    radial-gradient(620px 240px at 14% 60%, rgba(34, 211, 238, 0.16), transparent 66%),
+    radial-gradient(560px 220px at 84% 40%, rgba(255, 46, 136, 0.1), transparent 64%);
+  filter: blur(60px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+main { position: relative; z-index: 1; }
+
+/* цифры не прыгают при обновлении */
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+a { color: var(--s-ok); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+:focus-visible {
+  outline: 2px solid var(--s-ok);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── примитивы ── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 15px 16px;
+}
+
+.chip {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  font-variant-numeric: tabular-nums;
+  background: #132330;
+  border: 1px solid #1f3546;
+  color: #8fe7f5;
+  padding: 2px 8px;
+  border-radius: 7px;
+  white-space: nowrap;
+}
+
+.btn {
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--txt);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.btn:hover { border-color: #24384a; background: #0d1620; }
+.btn-primary {
+  background: var(--s-ok);
+  border-color: transparent;
+  color: #04161c;
+  font-weight: 650;
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.35);
+}
+.btn-primary:hover { background: #3ddcf2; }
+
+/* полоса план-факт: остаток тёмный, без штриховки */
+.track { position: relative; height: 9px; border-radius: 5px; background: var(--line-soft); }
+.track-fill { position: absolute; inset: 0 auto 0 0; border-radius: 5px; max-width: 100%; }
+.track-rest { position: absolute; top: 0; bottom: 0; right: 0; border-radius: 0 5px 5px 0; background: #101b24; border-left: 1px solid rgba(255, 255, 255, 0.14); }
+.track-plan { position: absolute; top: -4px; bottom: -4px; width: 2px; transform: translateX(-2px); background: #cbd5e1; box-shadow: 0 0 7px rgba(255, 255, 255, 0.55); }
+
+/* дорожка проекта */
+.rail { position: relative; height: 22px; border-radius: 7px; background: var(--card-2); overflow: hidden; }
+.rail-seg { position: absolute; inset: 0 auto 0 0; border-radius: 7px; display: flex; align-items: center; padding-left: 9px; font-size: 11px; font-weight: 650; color: #04121a; white-space: nowrap; overflow: hidden; }
+
+/* ── приёмы вёрстки текста (утверждены: 3, 2, 4, 6, 9, 5) ── */
+.t-accent { font-weight: 700; }                                   /* 3 — цветной акцент словом */
+.t-underline { border-bottom: 2px solid currentColor; padding-bottom: 1px; }  /* 2 — неоновое подчёркивание */
+.t-lead { font-size: 20px; line-height: 1.35; font-weight: 700; letter-spacing: -0.02em; color: #fff; }  /* 6 */
+.t-note {                                                          /* 5 — врезка-решение */
+  border-left: 3px solid var(--s-ok);
+  background: rgba(34, 211, 238, 0.06);
+  padding: 10px 14px;
+  border-radius: 0 11px 11px 0;
+  margin: 10px 0;
+  font-size: 14px;
+}
+.t-struck { text-decoration: line-through; text-decoration-color: var(--s-dead); color: var(--dim); }  /* служебное */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

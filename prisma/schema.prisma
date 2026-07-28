@@ -1,0 +1,524 @@
+// Мостик — схема данных. Канон: ТЗ v3.0, разделы 4 и 16.
+//
+// ВАЖНО: в SQLite нет перечислений, поэтому статусы хранятся строками.
+// Допустимые значения перечислены рядом с полем и проверяются в lib/domain.ts —
+// схема не должна расходиться с этим файлом.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ─────────────────────────── ЯДРО ───────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  role      String   @default("owner") // owner | member
+  createdAt DateTime @default(now())
+}
+
+model Project {
+  id           String    @id @default(cuid())
+  title        String
+  icon         String?
+  status       String    @default("candidate") // candidate | work | pause | frozen | done
+  win          String? // сверхцель: ради чего это вообще
+  monthGoal    String? // что станет правдой к концу месяца
+  potentialUsd Int? // сколько должен приносить в месяц
+  hoursWeek    Int? // бюджет часов Лео
+  hellYeah     Int? // 1..10
+  owner        String? // кто ведёт
+  forWhom      String? // кто ждёт результат
+  greenLights  String? // рамки: о чём боту можно писать людям без спроса
+  nextStep     String? // обязателен для активного
+  deadline     DateTime?
+  frozenUntil  DateTime? // дата возврата из морозилки
+  legacyKey    String? // ключ проекта в волте, чтобы не задвоить при импорте
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  streams        Stream[]
+  tasks          Task[]
+  krs            KR[]
+  milestones     Milestone[]
+  activities     Activity[]
+  contracts      MonthContract[]
+  reviews        ProjectReview[]
+  staffSlots     StaffSlot[]
+  agentRuns      AgentRun[]
+  briefs         Brief[]
+  decisions      Decision[]
+  metricRequests MetricRequest[]
+  teamChats      TeamChat[]
+  teamReports    TeamReport[]
+
+  @@index([status])
+}
+
+model Stream {
+  id         String   @id @default(cuid())
+  projectId  String
+  title      String
+  ownerName  String?
+  impactType String   @default("money") // money | launch | risk | save | asset
+  impactUsd  Int?
+  urgency    Int      @default(3) // 1 высшая .. 5
+  signal     String   @default("ok") // ok | over | behind | gap | dead | frozen | none — кэш, считается от фактов
+  nextStep   String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks   Task[]
+
+  @@index([projectId, active])
+}
+
+model Task {
+  id          String    @id @default(cuid())
+  title       String
+  measurable  String? // чем меряем результат
+  who         String    @default("Лео")
+  forWhom     String? // кто ждёт — обязателен по гейту
+  due         DateTime?
+  firstStep   String? // шаг до 10 минут, обязателен для задач дольше часа
+  ifThen      String? // «если X → делаю Y»
+  spokenAloud Boolean   @default(false) // проговорил ли «если-то» вслух
+  estimateMin Int?
+  status      String    @default("inbox") // inbox | today | doing | done | frozen
+  bucket      String? // pri | chore
+  isTopGoal   Boolean   @default(false)
+  frozenUntil DateTime?
+  mergedInto  String? // id победившего дубля — ничего не удаляем
+  delegated   Boolean   @default(false)
+  legacyId    Int? // id в старом каноне leo-os-tasks.js
+  legacyRaw   String? // исходная запись канона целиком — чтобы обратный экспорт не терял поля
+  projectId   String?
+  streamId    String?
+  personId    String?
+  createdAt   DateTime  @default(now())
+  doneAt      DateTime?
+
+  project    Project?   @relation(fields: [projectId], references: [id])
+  stream     Stream?    @relation(fields: [streamId], references: [id])
+  person     Person?    @relation(fields: [personId], references: [id])
+  activities Activity[]
+
+  @@index([status])
+  @@index([projectId])
+  @@index([legacyId])
+}
+
+model KR {
+  id        String   @id @default(cuid())
+  projectId String
+  name      String
+  current   Int      @default(0)
+  target    Int
+  unit      String?
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Milestone {
+  id        String    @id @default(cuid())
+  projectId String
+  title     String
+  done      Boolean   @default(false)
+  due       DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Person {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  role      String?
+  kpi       String?
+  tgHandle  String?
+  tgUserId  String?
+  tone      String   @default("ровный") // ровный | на равных | сухо и по делу
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  tasks          Task[]
+  weeklyGoals    WeeklyGoal[]
+  metrics        MetricEntry[]
+  teamChats      TeamChat[]
+  metricRequests MetricRequest[]
+  summaries      SummaryReply[]
+  reports        TeamReport[]
+}
+
+model WeeklyGoal {
+  id        String   @id @default(cuid())
+  personId  String
+  weekStart DateTime
+  text      String
+  status    String   @default("proposed") // proposed | confirmed | done | missed
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+}
+
+model MetricEntry {
+  id        String   @id @default(cuid())
+  personId  String?
+  projectId String?
+  weekStart DateTime
+  name      String
+  value     Float
+  unit      String?
+  createdAt DateTime @default(now())
+
+  person Person? @relation(fields: [personId], references: [id])
+}
+
+model MoneyMonth {
+  id      String @id @default(cuid())
+  month   String @unique // 2026-07
+  goalUsd Int
+  factUsd Int?
+}
+
+// Единственный источник движения. «Подумал» и «поговорил» сюда не пишутся.
+model Activity {
+  id        String   @id @default(cuid())
+  type      String // task_done | kr_tick | hours_logged | money_in
+  projectId String?
+  taskId    String?
+  minutes   Int?
+  amountUsd Int?
+  note      String?
+  createdAt DateTime @default(now())
+
+  project Project? @relation(fields: [projectId], references: [id])
+  task    Task?    @relation(fields: [taskId], references: [id])
+
+  @@index([projectId, createdAt])
+}
+
+model DailyPlan {
+  id        String    @id @default(cuid())
+  date      DateTime  @unique
+  taskIds   String // json-массив id
+  capacity  Int       @default(180)
+  closedAt  DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model WeeklyCommitment {
+  id        String   @id @default(cuid())
+  weekStart DateTime @unique
+  stones    String // три камня недели, json
+  stopList  String? // чего на этой неделе НЕ делаю, json
+  createdAt DateTime @default(now())
+}
+
+model MonthlyPortfolioEntry {
+  id        String @id @default(cuid())
+  month     String
+  projectId String
+  role      String // bet | supporting | frozen
+
+  @@unique([month, projectId])
+}
+
+model StreakFreeze {
+  id        String   @id @default(cuid())
+  usedOn    DateTime
+  weekStart DateTime
+}
+
+model ProjectReview {
+  id              String   @id @default(cuid())
+  projectId       String
+  weekStart       DateTime
+  wouldEnterAgain Boolean
+  note            String?
+  createdAt       DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Settings {
+  id             Int     @id @default(1)
+  dayCapacity    Int     @default(180)
+  hourRateUsd    Int?
+  freezesPerWeek Int     @default(2)
+  // тумблеры механик — их можно выключать, если приелось (ТЗ §15.2)
+  streakOn       Boolean @default(true)
+  pointsOn       Boolean @default(true)
+  dayNudgesOn    Boolean @default(true)
+  timeBarOn      Boolean @default(true)
+  motivationOn   Boolean @default(true)
+}
+
+// ────────────────── ХРОНОЛОГИЯ И ГЕЙТЫ (v3.0) ──────────────────
+
+model MonthContract {
+  id            String    @id @default(cuid())
+  projectId     String
+  month         String // 2026-07
+  becomesTrue   String // что станет правдой к концу месяца
+  lagMetric     String? // отчётное число: деньги, подписчики
+  lagTarget     Float?
+  leadMetric    String? // ВЕДУЩЕЕ число: то, что Лео контролирует на неделе
+  leadTarget    Float?
+  leadFact      Float     @default(0)
+  owner         String?
+  whatItGivesMe String?
+  decision      String? // finish | push | extract | freeze
+  decidedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, month])
+}
+
+model FacilitationSession {
+  id         String    @id @default(cuid())
+  kind       String // month | week
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  voiceOut   Boolean   @default(true)
+  questions  String? // json: что спросили
+  decisions  String? // json: что решили
+  transcript String?
+}
+
+// Единый гейт трёх вопросов — применяется ко ВСЕМУ (задача, инбокс, идея, проект)
+model GateAnswer {
+  id         String   @id @default(cuid())
+  entityType String // task | inbox | idea | project
+  entityId   String
+  hellYeah   Boolean
+  whoInstead String? // я | делегат: имя
+  moneyTrack String? // 5-10k | 50-100k | не про деньги
+  answeredAt DateTime @default(now())
+
+  @@index([entityType, entityId])
+}
+
+model WorkSession {
+  id             String    @id @default(cuid())
+  startedAt      DateTime  @default(now())
+  endedAt        DateTime?
+  plannedTaskIds String // json
+  closedTaskIds  String? // json
+  minutes        Int?
+}
+
+// ────────────────── ШТАБ, КОУЧ, ГОЛОС, ПИНГИ ──────────────────
+
+model AgentRole {
+  id               String  @id @default(cuid())
+  key              String  @unique // ceo | pm | coo | cfo | cmo | validator | scribe
+  title            String
+  emoji            String?
+  systemPromptPath String?
+  defaultCadence   String? // day | week | month
+}
+
+model StaffSlot {
+  id        String    @id @default(cuid())
+  projectId String
+  roleKey   String
+  enabled   Boolean   @default(true)
+  cadence   String    @default("week")
+  lastRunAt DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, roleKey])
+}
+
+model AgentRun {
+  id         String    @id @default(cuid())
+  projectId  String?
+  roleKey    String
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  status     String    @default("running") // running | ok | failed
+  costTokens Int?
+  summary    String?
+  outputPath String?
+
+  project Project? @relation(fields: [projectId], references: [id])
+}
+
+model Brief {
+  id        String   @id @default(cuid())
+  projectId String?
+  kind      String // day | week | month | adhoc
+  body      String
+  voicePath String?
+  imagePath String?
+  sentToTg  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  project   Project?   @relation(fields: [projectId], references: [id])
+  decisions Decision[]
+}
+
+model Decision {
+  id         String    @id @default(cuid())
+  briefId    String?
+  projectId  String?
+  question   String
+  options    String // json
+  answer     String?
+  answeredAt DateTime?
+  deadline   DateTime?
+  createdAt  DateTime  @default(now())
+
+  brief   Brief?   @relation(fields: [briefId], references: [id])
+  project Project? @relation(fields: [projectId], references: [id])
+}
+
+model MetricRequest {
+  id         String    @id @default(cuid())
+  personId   String
+  projectId  String?
+  metric     String
+  period     String
+  askedAt    DateTime  @default(now())
+  answeredAt DateTime?
+  value      Float?
+
+  person  Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id])
+}
+
+model CoachMemory {
+  id      String   @id @default(cuid())
+  date    DateTime @unique
+  dayPlan String? // json: что взял
+  delta   String? // json: что сделал
+  notes   String?
+  lessons String? // json: что система заметила
+}
+
+// Система учится на фактическом поведении, а не на словах
+model Preference {
+  id            String   @id @default(cuid())
+  key           String   @unique
+  value         String // json
+  evidenceCount Int      @default(1)
+  updatedAt     DateTime @updatedAt
+}
+
+model PromptShown {
+  id       String   @id @default(cuid())
+  poolKey  String
+  promptId String
+  shownAt  DateTime @default(now())
+
+  @@index([poolKey, shownAt])
+}
+
+model VoiceCommand {
+  id         String   @id @default(cuid())
+  rawText    String
+  intent     String?
+  entities   String? // json
+  resultRef  String?
+  confidence Float?
+  confirmed  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model Nudge {
+  id          String    @id @default(cuid())
+  kind        String
+  targetRef   String?
+  scheduledAt DateTime
+  sentAt      DateTime?
+  tapped      Boolean   @default(false)
+  snoozedTo   DateTime?
+
+  @@index([scheduledAt])
+}
+
+// ────────────────── КОМАНДНЫЙ КОНТУР (§16) ──────────────────
+
+model TeamChat {
+  id           String   @id @default(cuid())
+  personId     String
+  projectId    String?
+  tgChatId     String   @unique
+  title        String
+  role         String   @default("employee") // employee | partner | contractor
+  greenLights  String? // о чём боту можно писать без спроса
+  tone         String   @default("ровный")
+  active       Boolean  @default(true)
+  registeredAt DateTime @default(now())
+
+  person  Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id])
+
+  pushes  ChatPush[]
+  replies SummaryReply[]
+}
+
+model ChatPush {
+  id          String    @id @default(cuid())
+  teamChatId  String
+  kind        String // agenda | summary_request | reminder | report | infographic | task
+  scheduledAt DateTime
+  sentAt      DateTime?
+  messageId   String?
+  reaction    String?
+  payload     String? // json
+
+  teamChat TeamChat @relation(fields: [teamChatId], references: [id], onDelete: Cascade)
+
+  @@index([teamChatId, sentAt])
+}
+
+model SummaryReply {
+  id         String   @id @default(cuid())
+  teamChatId String
+  personId   String
+  weekStart  DateTime
+  rawText    String
+  voicePath  String?
+  parsed     String? // json
+  metrics    String? // json
+  receivedAt DateTime @default(now())
+
+  teamChat TeamChat @relation(fields: [teamChatId], references: [id], onDelete: Cascade)
+  person   Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+}
+
+model TeamReport {
+  id        String   @id @default(cuid())
+  personId  String?
+  projectId String?
+  kind      String // week_start | week_end | sprint
+  period    String
+  bodyHtml  String
+  imagePath String?
+  sentToLeo Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  person  Person?  @relation(fields: [personId], references: [id])
+  project Project? @relation(fields: [projectId], references: [id])
+}
+
+model Infographic {
+  id        String   @id @default(cuid())
+  template  String
+  dataJson  String
+  imagePath String
+  width     Int
+  height    Int
+  createdAt DateTime @default(now())
+}
