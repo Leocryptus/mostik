@@ -52,3 +52,11 @@ log-server.txt
 
 # бэкапы канона и базы — реальные данные, в репозиторий не кладём
 backups/
+
+# сгенерированный клиент Prisma — собирается командой prisma generate
+lib/generated/
+
+# скиллы, которые Prisma положила сама — не наш код
+.agents/skills/
+.windsurf/skills/
+skills-lock.json
