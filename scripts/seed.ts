@@ -1,31 +1,25 @@
 /**
- * Сид: проекты, люди и настройки из паспортов волта.
+ * Сид: проекты, люди и настройки.
  *
  *   npx tsx scripts/seed.ts
  *
- * Данные взяты из аудита 25.07 и ТЗ. Проекты заводятся кандидатами:
- * по правилу ТЗ проект не становится активным, пока не прошёл прожарку.
+ * Данные берутся из scripts/seed.data.local.ts (он не в репозитории).
+ * Если его нет — из seed.data.example.ts, чтобы проект поднимался у любого.
+ * Проекты заводятся кандидатами: по правилу ТЗ проект не становится активным,
+ * пока не прошёл прожарку.
  */
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { db as prisma } from "../lib/db";
 
-const PROJECTS = [
-  { title: "Cryptus", legacyKey: "cryptus", potentialUsd: 10000, hellYeah: 9, owner: "Ник и Гера", forWhom: "аудитория канала", icon: "🟣" },
-  { title: "MAST Finance", legacyKey: "mast", potentialUsd: 5000, hellYeah: 7, owner: "Гео и Гриша", forWhom: "партнёры", icon: "🪙" },
-  { title: "Обменка", legacyKey: "exchange", potentialUsd: 5000, hellYeah: 6, owner: "Герман", forWhom: "клиенты OTC", icon: "💱" },
-  { title: "Union", legacyKey: "union", potentialUsd: 5000, hellYeah: 5, owner: "Женя", forWhom: "инвесторы", icon: "📊" },
-  { title: "Медиа и контент", legacyKey: "media", potentialUsd: null, hellYeah: 8, owner: null, forWhom: "аудитория", icon: "🎬" },
-];
-
-const PEOPLE = [
-  { name: "Гео", role: "ассистент, развитие и инфраструктура", tone: "ровный", active: true },
-  { name: "Герман", role: "обменник, сооснователь MAST", tone: "на равных", active: true },
-  { name: "Гриша", role: "разработка", tone: "сухо и по делу", active: true },
-  { name: "Женя", role: "Union, публичные ресурсы", tone: "ровный", active: true },
-  { name: "Стас", role: "партнёрства", tone: "ровный", active: true },
-  { name: "Кирилл", role: "контент (ушёл 20.07)", tone: "ровный", active: false },
-];
+async function loadData() {
+  const local = path.resolve("scripts/seed.data.local.ts");
+  return existsSync(local) ? await import("./seed.data.local") : await import("./seed.data.example");
+}
 
 async function main() {
+  const { PROJECTS, PEOPLE, MONTH_GOAL_USD, HOUR_RATE_USD } = await loadData();
+
   for (const p of PROJECTS) {
     const existing = await prisma.project.findFirst({ where: { legacyKey: p.legacyKey } });
     if (existing) {
@@ -40,20 +34,15 @@ async function main() {
   }
 
   const month = new Date().toISOString().slice(0, 7);
-  await prisma.moneyMonth.upsert({
-    where: { month },
-    update: {},
-    create: { month, goalUsd: 20000 },
-  });
-
+  await prisma.moneyMonth.upsert({ where: { month }, update: {}, create: { month, goalUsd: MONTH_GOAL_USD } });
   await prisma.settings.upsert({
     where: { id: 1 },
     update: {},
-    create: { id: 1, dayCapacity: 180, hourRateUsd: 62, freezesPerWeek: 2 },
+    create: { id: 1, dayCapacity: 180, hourRateUsd: HOUR_RATE_USD, freezesPerWeek: 2 },
   });
 
   const [projects, people] = await Promise.all([prisma.project.count(), prisma.person.count()]);
-  console.log(`Проектов: ${projects}, людей: ${people}, месяц ${month} с целью $20 000`);
+  console.log(`Проектов: ${projects}, людей: ${people}, месяц ${month} с целью $${MONTH_GOAL_USD.toLocaleString("ru-RU")}`);
   console.log("Все проекты заведены кандидатами — активными станут после прожарки");
 }
 

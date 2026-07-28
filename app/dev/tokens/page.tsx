@@ -75,9 +75,9 @@ export default function TokensPage() {
         Незакрытая часть остаётся тёмной — она и есть отставание. Белая засечка показывает план. Штриховки нет.
       </p>
       <div className="card">
-        <Row name="Cryptus · офферы биржам" fact={6} plan={5} />
-        <Row name="Обменка · новые каналы" fact={2} plan={4} />
-        <Row name="MAST · кошельки партнёров" fact={1} plan={3} />
+        <Row name="Продажи · офферы партнёрам" fact={6} plan={5} />
+        <Row name="Каналы · новые источники" fact={2} plan={4} />
+        <Row name="Продукт · интеграции" fact={1} plan={3} />
       </div>
 
       {/* СВЕТОФОР ПО ТИШИНЕ */}
@@ -117,16 +117,16 @@ export default function TokensPage() {
       <div className="card">
         <p className="t-lead" style={{ margin: "0 0 10px" }}>До цели месяца не хватает $13&nbsp;600.</p>
         <p style={{ margin: "0 0 8px" }}>
-          🎯 Главная ставка месяца — <span className="t-underline" style={{ color: "var(--s-ok)" }}>Cryptus</span>, остальное поддерживает.
+          🎯 Главная ставка месяца — <span className="t-underline" style={{ color: "var(--s-ok)" }}>первый проект</span>, остальное поддерживает.
         </p>
         <p style={{ margin: "0 0 8px" }}>
-          Каналы обменки: <span className="t-accent" style={{ color: "var(--s-behind)" }}>отстаём на два</span> при двух днях до конца недели.
+          Второе направление: <span className="t-accent" style={{ color: "var(--s-behind)" }}>отстаём на два</span> при двух днях до конца недели.
         </p>
         <p style={{ margin: "0 0 4px" }}>
           Ставка часа <span className="chip">$62</span>, задача на <span className="chip">90 мин</span> — считается по деньгам.
         </p>
         <div className="t-note" style={{ borderLeftColor: "var(--s-gap)", background: "rgba(255,46,136,.06)" }}>
-          Union молчит пятнадцать дней. Нужно решение: шаг, делегат или заморозка.
+          Третий проект молчит пятнадцать дней. Нужно решение: шаг, делегат или заморозка.
         </div>
         <p style={{ margin: 0, fontSize: 14 }}>
           Задача <span className="t-struck">«Поресёрчить рынок»</span> заменена на «Собрать пять офферов до пятницы».

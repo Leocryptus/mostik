@@ -10,7 +10,7 @@ import { parseLegacyFile, mapLegacyTask, findDuplicates } from "@/lib/legacy";
 // Реальный формат канона: заголовок лежит в поле text, а не title
 const SAMPLE = `// комментарий сверху
 const LEO_TASKS = [
-  {"text":"Отправить оффер биржам","topic":"Cryptus","date":"05.07","who":null,"deadline":null,"priority":false,"done":false,"status":"inbox","id":100,"day":"05.07","bucket":null},
+  {"text":"Отправить оффер биржам","topic":"работа","date":"05.07","who":null,"deadline":null,"priority":false,"done":false,"status":"inbox","id":100,"day":"05.07","bucket":null},
   {"text":"Заплатить за домен","topic":null,"date":"04.07","who":null,"deadline":"2026-07-07","priority":false,"done":true,"status":"inbox","id":101,"day":null,"bucket":"chore","done_at":"27.07.2026"},
   {"text":"Отправить оффер биржам","topic":null,"date":"06.07","who":"Гео","deadline":null,"priority":false,"done":false,"status":"inbox","id":102,"day":null,"bucket":null}
 ];

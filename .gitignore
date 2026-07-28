@@ -60,3 +60,6 @@ lib/generated/
 .agents/skills/
 .windsurf/skills/
 skills-lock.json
+
+# настоящие проекты, люди и суммы — только локально
+scripts/seed.data.local.ts
