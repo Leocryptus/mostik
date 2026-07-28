@@ -33,8 +33,9 @@ async function main() {
   const now = Date.now();
   const dayMs = 86_400_000;
 
-  const [projects, moneyMonth, total, inbox, done, noDay, people, settings, todayTasks, inboxTasks, facts] = await Promise.all([
-    db.project.findMany({ orderBy: { potentialUsd: "desc" } }),
+  const [projects, contracts, moneyMonth, total, inbox, done, noDay, people, settings, todayTasks, inboxTasks, facts] = await Promise.all([
+    db.project.findMany({ orderBy: [{ status: "asc" }, { potentialUsd: "desc" }] }),
+    db.monthContract.findMany({ where: { month } }),
     db.moneyMonth.findFirst({ where: { month } }),
     db.task.count(),
     db.task.count({ where: { status: "inbox" } }),
@@ -121,13 +122,26 @@ footer{color:var(--dim);font-size:12.5px;margin-top:20px}
 </div>
 
 <div class="card">
-  <h2>Что взять</h2>
-  <div style="font-size:12.5px;color:var(--muted);margin:2px 0 8px">система посчитала из ${inbox} задач в инбоксе</div>
-  ${top3.map((c) => `<div class="row"><div class="ttl"><div>${esc(c.title)}</div><div class="why">${esc(c.why.join(" · "))}</div></div></div>`).join("")}
+  <h2>Проекты месяца</h2>
+  <div style="font-size:12.5px;color:var(--muted);margin:2px 0 8px">цель, ведущее число и один следующий шаг</div>
+  ${[...projects].sort((a, b) => (a.status === "work" ? 0 : 1) - (b.status === "work" ? 0 : 1)).map((p) => {
+    const c = contracts.find((x) => x.projectId === p.id);
+    const act = p.status === "work";
+    return `<div class="row" style="align-items:flex-start;padding:12px 0;opacity:${act ? 1 : 0.65}">
+      ${MARK[act ? "ok" : "none"]}
+      <div class="ttl" style="white-space:normal">
+        <div style="font-weight:650;font-size:15px">${p.icon ?? ""} ${esc(p.title)}</div>
+        ${act ? `<div style="font-size:13px;margin-top:4px">🎯 ${esc(p.monthGoal ?? "цель месяца не задана")}</div>
+        ${c?.leadMetric ? `<div class="num" style="font-size:12.5px;color:var(--muted);margin-top:3px">📈 ${esc(c.leadMetric)}: <b style="color:var(--ok)">${c.leadFact}</b>${c.leadTarget ? ` из ${c.leadTarget} за неделю` : ""}</div>` : ""}
+        <div style="font-size:13px;margin-top:3px">➡️ ${esc(p.nextStep ?? "следующий шаг не задан")}</div>` : `<div style="font-size:12.5px;color:var(--dim);margin-top:3px">не взят в месяц</div>`}
+      </div>
+      <span class="num" style="font-size:12.5px;color:${p.potentialUsd ? "var(--ok)" : "var(--none)"}">${p.potentialUsd ? money(p.potentialUsd) + " / мес" : "цифры нет"}</span>
+    </div>`;
+  }).join("")}
 </div>
 
 <div class="card">
-  <h2>Задачи</h2>
+  <h2>Мелочёвка и входящие</h2>
   <div class="flex" style="margin:10px 0 0;gap:20px">
     <span class="num">всего <b style="font-size:19px">${total}</b></span>
     <span class="num" style="color:var(--behind)">в инбоксе <b style="font-size:19px">${inbox}</b></span>
@@ -140,13 +154,6 @@ footer{color:var(--dim);font-size:12.5px;margin-top:20px}
     const sig = signalBySilence(t.age);
     return `<div class="row">${MARK[sig]}<span class="ttl">${esc(t.title)}</span><span class="num" style="font-size:12.5px;color:${SIGNALS[sig].color.replace("var(--s-", "var(--").replace(")", ")")}">${t.age} дн</span></div>`;
   }).join("")}
-</div>
-
-<div class="card">
-  <h2>Проекты</h2>
-  <div style="font-size:12.5px;color:var(--muted);margin:2px 0 8px">${people} человек в команде</div>
-  ${projects.map((p) => `<div class="row">${MARK[p.status === "candidate" ? "none" : "ok"]}<span class="ttl">${p.icon ?? ""} ${esc(p.title)}${p.owner ? `<span style="color:var(--muted);font-size:12.5px"> · ведёт ${esc(p.owner)}</span>` : ""}</span><span class="num" style="font-size:13;color:${p.potentialUsd ? "var(--ok)" : "var(--none)"}">${p.potentialUsd ? money(p.potentialUsd) + " / мес" : "цифры нет"}</span></div>`).join("")}
-  <div class="note">Проекты пока кандидаты: активными станут после прожарки, где появятся ведущее число, владелец и контракт месяца.</div>
 </div>
 
 <footer>Это снимок на ${stamp}, кнопки в нём не работают. Живая версия с кнопками — на маке, порт 8793.</footer>

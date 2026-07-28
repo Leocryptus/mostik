@@ -1,112 +1,104 @@
 import { db } from "@/lib/db";
-import { DayBoard } from "@/app/components/day-board";
-import { SignalMark } from "@/app/components/signal-mark";
+import { MonthBoard, type ProjectCard } from "@/app/components/month-board";
+import { signalBySilence } from "@/lib/signals";
 
-export const dynamic = "force-dynamic"; // мостик всегда показывает свежее состояние
+export const dynamic = "force-dynamic";
 
 const money = (n: number) => "$" + n.toLocaleString("ru-RU").replace(/,/g, " ");
 
+/**
+ * Мостик. Сверху — проекты месяца: цель, ведущее число, один следующий шаг.
+ * Инбокс сюда не лезет: он отдельной страницей и открывается, когда основное
+ * сделано. Это прямое правило из ТЗ — мелочёвка идёт десертом, не закуской.
+ */
 export default async function Bridge() {
   const month = new Date().toISOString().slice(0, 7);
+  const now = Date.now();
 
-  const [projects, moneyMonth, total, inbox, done, noDay, people] = await Promise.all([
-    db.project.findMany({ orderBy: { potentialUsd: "desc" } }),
+  const [projects, contracts, moneyMonth, todayCount, inboxCount, doneToday] = await Promise.all([
+    db.project.findMany({ orderBy: [{ status: "asc" }, { potentialUsd: "desc" }] }),
+    db.monthContract.findMany({ where: { month } }),
     db.moneyMonth.findFirst({ where: { month } }),
-    db.task.count(),
+    db.task.count({ where: { status: { in: ["today", "doing"] } } }),
     db.task.count({ where: { status: "inbox" } }),
-    db.task.count({ where: { status: "done" } }),
-    db.task.count({ where: { status: "inbox", due: null } }),
-    db.person.count({ where: { active: true } }),
+    db.activity.count({ where: { type: "task_done", createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } } }),
   ]);
 
-  const potential = projects.reduce((s, p) => s + (p.potentialUsd ?? 0), 0);
-  const goal = moneyMonth?.goalUsd ?? 0;
-  const fact = moneyMonth?.factUsd ?? null;
+  const lastFacts = await db.activity.groupBy({
+    by: ["projectId"],
+    _max: { createdAt: true },
+  });
+  const lastByProject = new Map(lastFacts.map((f) => [f.projectId, f._max.createdAt]));
+
+  const cards: ProjectCard[] = projects.map((p) => {
+    const last = lastByProject.get(p.id);
+    const silentDays = last ? Math.floor((now - last.getTime()) / 86_400_000) : 999;
+    const c = contracts.find((x) => x.projectId === p.id);
+    return {
+      id: p.id,
+      title: p.title,
+      icon: p.icon,
+      status: p.status,
+      monthGoal: p.monthGoal,
+      nextStep: p.nextStep,
+      potentialUsd: p.potentialUsd,
+      owner: p.owner,
+      leadMetric: c?.leadMetric ?? null,
+      leadTarget: c?.leadTarget ?? null,
+      leadFact: c?.leadFact ?? 0,
+      signal: last ? signalBySilence(silentDays) : "none",
+      silentDays: last ? silentDays : 0,
+    };
+  });
+
+  const activeCount = cards.filter((c) => c.status === "work").length;
+  const potential = cards.filter((c) => c.status === "work").reduce((s, p) => s + (p.potentialUsd ?? 0), 0);
 
   return (
-    <main style={{ maxWidth: 1000, margin: "0 auto", padding: "40px 20px 80px" }}>
-      <p className="num" style={{ fontSize: 11, letterSpacing: ".16em", textTransform: "uppercase", color: "var(--dim)", margin: "0 0 10px" }}>
+    <main style={{ maxWidth: 860, margin: "0 auto", padding: "36px 18px 80px" }}>
+      <p className="num" style={{ fontSize: 11, letterSpacing: ".16em", textTransform: "uppercase", color: "var(--dim)", margin: "0 0 9px" }}>
         Мостик · {new Date().toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}
       </p>
-      <h1 style={{ fontSize: 34, letterSpacing: "-.035em", lineHeight: 1.06, margin: "0 0 26px" }}>Где мы сейчас</h1>
+      <h1 style={{ fontSize: 30, letterSpacing: "-.035em", lineHeight: 1.06, margin: "0 0 8px" }}>Проекты месяца</h1>
+      <p style={{ color: "var(--muted)", fontSize: 13.5, margin: "0 0 20px", maxWidth: "62ch" }}>
+        Три-пять штук, за которые рубишься. У каждого цель, ведущее число и один следующий шаг.
+      </p>
 
-      {/* контур дня — первое, что видно */}
-      <DayBoard />
+      {/* деньги — одной строкой, без графиков */}
+      <div className="card" style={{ marginBottom: 14, display: "flex", gap: 24, flexWrap: "wrap", alignItems: "baseline" }}>
+        <span className="num" style={{ fontSize: 13.5 }}>
+          цель месяца <b style={{ fontSize: 19 }}>{money(moneyMonth?.goalUsd ?? 0)}</b>
+        </span>
+        <span className="num" style={{ fontSize: 13.5, color: "var(--s-ok)" }}>
+          в работе <b style={{ fontSize: 19 }}>{money(potential)}</b>
+        </span>
+        <span className="num" style={{ fontSize: 13.5, color: "var(--muted)" }}>
+          факт <b style={{ fontSize: 19 }}>{moneyMonth?.factUsd ? money(moneyMonth.factUsd) : "—"}</b>
+        </span>
+        <span className="num" style={{ fontSize: 12.5, color: activeCount > 5 ? "var(--s-behind)" : "var(--dim)", marginLeft: "auto" }}>
+          активных проектов {activeCount} / 5
+        </span>
+      </div>
 
+      <MonthBoard projects={cards} />
 
-      {/* ДЕНЬГИ МЕСЯЦА */}
-      <div className="card" style={{ marginBottom: 14 }}>
-        <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
-          <div>
-            <div style={{ fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--muted)" }}>Цель месяца</div>
-            <div className="num" style={{ fontSize: 26, fontWeight: 750, marginTop: 3 }}>{money(goal)}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--muted)" }}>Потенциал проектов</div>
-            <div className="num" style={{ fontSize: 26, fontWeight: 750, marginTop: 3, color: "var(--s-ok)" }}>{money(potential)}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--muted)" }}>Факт</div>
-            <div className="num" style={{ fontSize: 26, fontWeight: 750, marginTop: 3, color: fact === null ? "var(--s-none)" : "var(--s-ok)" }}>
-              {fact === null ? "—" : money(fact)}
+      {/* мелочёвка — после основного, отдельной страницей */}
+      <div className="card" style={{ marginTop: 18, background: "transparent", borderStyle: "dashed" }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>Мелочёвка и входящие</div>
+            <div style={{ color: "var(--muted)", fontSize: 12.5, marginTop: 2 }}>
+              {inboxCount} записей ждут разбора. Открывается, когда основное сделано — сегодня закрыто {doneToday}.
             </div>
-            <div style={{ fontSize: 11.5, color: "var(--dim)", marginTop: 2 }}>вводится в конце месяца</div>
           </div>
+          <a className="btn" href="/inbox" style={{ textDecoration: "none", padding: "7px 14px", fontSize: 12.5 }}>
+            Открыть инбокс
+          </a>
         </div>
       </div>
 
-      {/* ЗАДАЧИ */}
-      <div className="card" style={{ marginBottom: 14 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-          <h2 style={{ fontSize: 17, margin: 0 }}>Задачи</h2>
-          <span className="num" style={{ fontSize: 12.5, color: "var(--muted)" }}>перенесено из старого канона</span>
-        </div>
-        <div style={{ display: "flex", gap: 22, flexWrap: "wrap", marginBottom: 12 }}>
-          <span className="num" style={{ fontSize: 15 }}>
-            всего <b style={{ fontSize: 19 }}>{total}</b>
-          </span>
-          <span className="num" style={{ fontSize: 15, color: "var(--s-behind)" }}>
-            в инбоксе <b style={{ fontSize: 19 }}>{inbox}</b>
-          </span>
-          <span className="num" style={{ fontSize: 15, color: "var(--s-over)" }}>
-            закрыто <b style={{ fontSize: 19 }}>{done}</b>
-          </span>
-          <span className="num" style={{ fontSize: 15, color: "var(--s-gap)" }}>
-            без дня <b style={{ fontSize: 19 }}>{noDay}</b>
-          </span>
-        </div>
-
-        <div className="t-note" style={{ borderLeftColor: "var(--s-gap)", background: "rgba(255,46,136,.06)", margin: "0 0 12px" }}>
-          Из {total} задач {inbox} лежат в инбоксе, у {noDay} нет дня. Это и есть та куча, ради которой всё строится — контур дня начнёт разбирать её на следующем шаге.
-        </div>
-
-      </div>
-
-      {/* ПРОЕКТЫ */}
-      <div className="card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-          <h2 style={{ fontSize: 17, margin: 0 }}>Проекты</h2>
-          <span className="num" style={{ fontSize: 12.5, color: "var(--muted)" }}>{people} человек в команде</span>
-        </div>
-        {projects.map((p) => (
-          <div key={p.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "9px 0", borderTop: "1px solid var(--line)", fontSize: 14 }}>
-            <SignalMark signal={p.status === "candidate" ? "none" : "ok"} />
-            <span style={{ flex: 1 }}>
-              {p.icon} {p.title}
-              {p.owner && <span style={{ color: "var(--muted)", fontSize: 12.5 }}> · ведёт {p.owner}</span>}
-            </span>
-            <span className="num" style={{ fontSize: 13, color: p.potentialUsd ? "var(--s-ok)" : "var(--s-none)" }}>
-              {p.potentialUsd ? money(p.potentialUsd) + " / мес" : "цифры нет"}
-            </span>
-          </div>
-        ))}
-        <div className="t-note" style={{ marginBottom: 0 }}>
-          Все проекты пока кандидаты: активными они станут после прожарки, где у каждого появятся ведущее число, владелец и контракт месяца.
-        </div>
-      </div>
-
-      <p style={{ color: "var(--dim)", fontSize: 12.5, marginTop: 22 }}>
-        Данные живые, из базы мостика. Стиль — <a href="/dev/tokens">дизайн-ядро</a>.
+      <p style={{ color: "var(--dim)", fontSize: 12.5, marginTop: 20 }}>
+        В дне сейчас {todayCount} из 3 задач · стиль — <a href="/dev/tokens">дизайн-ядро</a>
       </p>
     </main>
   );
