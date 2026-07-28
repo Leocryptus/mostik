@@ -1,30 +1,21 @@
 import { db } from "@/lib/db";
+import { DayBoard } from "@/app/components/day-board";
 import { SignalMark } from "@/app/components/signal-mark";
-import { SIGNALS, signalBySilence } from "@/lib/signals";
 
 export const dynamic = "force-dynamic"; // мостик всегда показывает свежее состояние
 
 const money = (n: number) => "$" + n.toLocaleString("ru-RU").replace(/,/g, " ");
-const daysSince = (d: Date) => Math.floor((Date.now() - d.getTime()) / 86_400_000);
-const plural = (n: number, one: string, few: string, many: string) => {
-  const m10 = n % 10;
-  const m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return one;
-  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
-  return many;
-};
 
 export default async function Bridge() {
   const month = new Date().toISOString().slice(0, 7);
 
-  const [projects, moneyMonth, total, inbox, done, noDay, oldest, people] = await Promise.all([
+  const [projects, moneyMonth, total, inbox, done, noDay, people] = await Promise.all([
     db.project.findMany({ orderBy: { potentialUsd: "desc" } }),
     db.moneyMonth.findFirst({ where: { month } }),
     db.task.count(),
     db.task.count({ where: { status: "inbox" } }),
     db.task.count({ where: { status: "done" } }),
     db.task.count({ where: { status: "inbox", due: null } }),
-    db.task.findMany({ where: { status: "inbox" }, orderBy: { createdAt: "asc" }, take: 5 }),
     db.person.count({ where: { active: true } }),
   ]);
 
@@ -38,6 +29,10 @@ export default async function Bridge() {
         Мостик · {new Date().toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}
       </p>
       <h1 style={{ fontSize: 34, letterSpacing: "-.035em", lineHeight: 1.06, margin: "0 0 26px" }}>Где мы сейчас</h1>
+
+      {/* контур дня — первое, что видно */}
+      <DayBoard />
+
 
       {/* ДЕНЬГИ МЕСЯЦА */}
       <div className="card" style={{ marginBottom: 14 }}>
@@ -85,20 +80,6 @@ export default async function Bridge() {
           Из {total} задач {inbox} лежат в инбоксе, у {noDay} нет дня. Это и есть та куча, ради которой всё строится — контур дня начнёт разбирать её на следующем шаге.
         </div>
 
-        <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 7 }}>Дольше всех ждут:</div>
-        {oldest.map((t) => {
-          const age = daysSince(t.createdAt);
-          const sig = signalBySilence(age);
-          return (
-            <div key={t.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "7px 0", borderTop: "1px solid var(--line)", fontSize: 14 }}>
-              <SignalMark signal={sig} />
-              <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</span>
-              <span className="num" style={{ fontSize: 12.5, color: SIGNALS[sig].color }}>
-                {age} {plural(age, "день", "дня", "дней")}
-              </span>
-            </div>
-          );
-        })}
       </div>
 
       {/* ПРОЕКТЫ */}
