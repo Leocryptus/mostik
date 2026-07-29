@@ -1,16 +1,23 @@
 import Link from "next/link";
 
-/** Вкладки. На главном — решения, на вкладках — работа (ТЗ §19). */
-export function Nav({ active }: { active: "main" | "day" | "projects" }) {
-  const items = [
-    { key: "main", href: "/", label: "Главный" },
-    { key: "day", href: "/inbox", label: "День" },
-    { key: "projects", href: "/projects", label: "Проекты" },
-  ] as const;
+/**
+ * Вкладки в порядке приближения: сейчас → сегодня → неделя → месяц → склад проектов.
+ * На главном — решения, на вкладках — работа (ТЗ §19.5).
+ */
+export type NavKey = "main" | "day" | "week" | "month" | "projects";
 
+const ITEMS: { key: NavKey; href: string; label: string }[] = [
+  { key: "main", href: "/", label: "Главный" },
+  { key: "day", href: "/day", label: "День" },
+  { key: "week", href: "/week", label: "Неделя" },
+  { key: "month", href: "/month", label: "Месяц" },
+  { key: "projects", href: "/projects", label: "Проекты" },
+];
+
+export function Nav({ active }: { active: NavKey }) {
   return (
     <nav style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
-      {items.map((i) => {
+      {ITEMS.map((i) => {
         const on = i.key === active;
         return (
           <Link

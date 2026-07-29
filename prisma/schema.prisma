@@ -99,6 +99,7 @@ model Task {
   delegated   Boolean   @default(false)
   legacyId    Int? // id в старом каноне leo-os-tasks.js
   legacyRaw   String? // исходная запись канона целиком — чтобы обратный экспорт не терял поля
+  weekStart   DateTime? // неделя, на которую задача выбрана основной (ТЗ §19.5)
   projectId   String?
   streamId    String?
   personId    String?
@@ -113,6 +114,7 @@ model Task {
   @@index([status])
   @@index([projectId])
   @@index([legacyId])
+  @@index([weekStart])
 }
 
 model KR {

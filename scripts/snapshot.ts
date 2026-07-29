@@ -7,15 +7,24 @@
  * Стили инлайновые, данные — из базы на момент запуска. Кнопки в снимке
  * не работают: это фотография, а не приложение.
  *
+ * Порядок блоков повторяет порядок экранов (ТЗ §19.5): неделя → цели месяца →
+ * сегодня → цифры месяца. Снимок должен читаться так же, как сам мостик.
+ *
  * Этот же рендер станет основой картинок-отчётов для Телеграма (ТЗ §16.4).
  */
 import { writeFileSync } from "node:fs";
 import { db } from "../lib/db";
-import { rankCandidates, capacityState, streakFromDays, type Candidate } from "../lib/day";
-import { signalBySilence, SIGNALS } from "../lib/signals";
+import { capacityState, streakFromDays } from "../lib/day";
+import { weekStartOf, weekLabel, daysLeftInWeek, parseList } from "../lib/week";
+import { signalBySilence, signalByProgress, SIGNALS } from "../lib/signals";
 
 const money = (n: number) => "$" + n.toLocaleString("ru-RU").replace(/,/g, " ");
 const esc = (s: string) => s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]!);
+/** цвета сигналов в снимке свои: переменных --s-* здесь нет */
+const COLOR: Record<string, string> = {
+  ok: "#22d3ee", over: "#34d399", behind: "#fbbf24",
+  gap: "#ff2e88", dead: "#f43f5e", frozen: "#818cf8", none: "#64748b",
+};
 
 const MARK: Record<string, string> = {
   ok: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="#22d3ee"/></svg>`,
@@ -29,46 +38,63 @@ const MARK: Record<string, string> = {
 
 async function main() {
   const out = process.argv[2] ?? "snapshot.html";
-  const month = new Date().toISOString().slice(0, 7);
-  const now = Date.now();
+  const nowDate = new Date();
+  const now = nowDate.getTime();
   const dayMs = 86_400_000;
+  const month = nowDate.toISOString().slice(0, 7);
+  const monthStart = new Date(nowDate.getFullYear(), nowDate.getMonth(), 1);
+  const daysInMonth = new Date(nowDate.getFullYear(), nowDate.getMonth() + 1, 0).getDate();
+  const monthProgress = Math.round((nowDate.getDate() / daysInMonth) * 100);
+  const weekStart = weekStartOf(nowDate);
 
-  const [projects, contracts, moneyMonth, total, inbox, done, noDay, people, settings, todayTasks, inboxTasks, facts] = await Promise.all([
-    db.project.findMany({ orderBy: [{ status: "asc" }, { potentialUsd: "desc" }] }),
-    db.monthContract.findMany({ where: { month } }),
-    db.moneyMonth.findFirst({ where: { month } }),
-    db.task.count(),
-    db.task.count({ where: { status: "inbox" } }),
-    db.task.count({ where: { status: "done" } }),
-    db.task.count({ where: { status: "inbox", due: null } }),
-    db.person.count({ where: { active: true } }),
-    db.settings.findUnique({ where: { id: 1 } }),
-    db.task.findMany({ where: { status: { in: ["today", "doing"] } } }),
-    db.task.findMany({ where: { status: "inbox" }, include: { project: true }, take: 200 }),
-    db.activity.findMany({ where: { createdAt: { gte: new Date(now - 90 * dayMs) } }, select: { createdAt: true } }),
-  ]);
+  const [projects, contracts, moneyMonth, commitment, weekTasks, todayTasks, total, inbox, done, settings, facts, monthFacts] =
+    await Promise.all([
+      db.project.findMany({ orderBy: [{ status: "asc" }, { potentialUsd: "desc" }] }),
+      db.monthContract.findMany({ where: { month } }),
+      db.moneyMonth.findFirst({ where: { month } }),
+      db.weeklyCommitment.findUnique({ where: { weekStart } }),
+      db.task.findMany({ where: { weekStart, status: { not: "frozen" } }, include: { project: true } }),
+      db.task.findMany({ where: { status: { in: ["today", "doing"] } }, orderBy: { isTopGoal: "desc" } }),
+      db.task.count(),
+      db.task.count({ where: { status: "inbox" } }),
+      db.task.count({ where: { status: "done" } }),
+      db.settings.findUnique({ where: { id: 1 } }),
+      db.activity.findMany({ where: { createdAt: { gte: new Date(now - 90 * dayMs) } }, select: { createdAt: true } }),
+      db.activity.findMany({ where: { createdAt: { gte: monthStart } }, select: { projectId: true, createdAt: true } }),
+    ]);
 
-  const candidates: Candidate[] = inboxTasks.map((t) => ({
-    id: t.id,
-    title: t.title,
-    potentialUsd: t.project?.potentialUsd ?? undefined,
-    hellYeah: t.project?.hellYeah ?? undefined,
-    hoursCost: t.estimateMin ? t.estimateMin / 60 : 1,
-    overdueDays: t.due && t.due.getTime() < now ? Math.floor((now - t.due.getTime()) / dayMs) : 0,
-    ageDays: Math.floor((now - t.createdAt.getTime()) / dayMs),
-  }));
-
-  const top3 = rankCandidates(candidates);
   const cap = capacityState(todayTasks.reduce((s, t) => s + (t.estimateMin ?? 30), 0), settings?.dayCapacity ?? 180);
-  const streak = streakFromDays(facts.map((f) => f.createdAt), new Date(), settings?.freezesPerWeek ?? 2);
-  const potential = projects.reduce((s, p) => s + (p.potentialUsd ?? 0), 0);
+  const streak = streakFromDays(facts.map((f) => f.createdAt), nowDate, settings?.freezesPerWeek ?? 2);
+  const active = projects.filter((p) => p.status === "work");
+  const potential = active.reduce((s, p) => s + (p.potentialUsd ?? 0), 0);
 
-  const oldest = [...inboxTasks]
-    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
-    .slice(0, 6)
-    .map((t) => ({ title: t.title, age: Math.floor((now - t.createdAt.getTime()) / dayMs) }));
+  const goal = moneyMonth?.goalUsd ?? 0;
+  const factUsd = moneyMonth?.factUsd ?? 0;
+  const gap = goal - factUsd;
+  const moneyPct = goal ? Math.min(100, Math.round((factUsd / goal) * 100)) : 0;
 
-  const stamp = new Date().toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+  const lastByProject = new Map<string, Date>();
+  for (const f of monthFacts) {
+    if (f.projectId && !lastByProject.has(f.projectId)) lastByProject.set(f.projectId, f.createdAt);
+  }
+
+  const stones = parseList(commitment?.stones);
+  const stopList = parseList(commitment?.stopList);
+  const stamp = nowDate.toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+  const [mainTask, ...restToday] = todayTasks;
+
+  const rows = active.map((p) => {
+    const c = contracts.find((x) => x.projectId === p.id);
+    const last = lastByProject.get(p.id);
+    const silent = last ? Math.floor((now - last.getTime()) / dayMs) : null;
+    const pct = c?.leadTarget ? Math.min(100, Math.round((c.leadFact / c.leadTarget) * 100)) : 0;
+    const signal = c?.leadTarget
+      ? signalByProgress(c.leadFact, c.leadTarget)
+      : silent === null
+        ? "none"
+        : signalBySilence(silent);
+    return { p, c, pct, signal, silent };
+  });
 
   const html = `<title>Мостик — снимок ${stamp}</title>
 <style>
@@ -84,23 +110,76 @@ background-image:radial-gradient(620px 240px at 14% 0,rgba(34,211,238,.14),trans
 h1{font-size:clamp(26px,6vw,34px);letter-spacing:-.035em;line-height:1.06;margin:0 0 22px}
 h2{font-size:17px;margin:0}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:15px 16px;margin-bottom:13px}
-.row{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
-.row:first-of-type{border-top:none}
+.row{display:flex;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
 .flex{display:flex;gap:24px;flex-wrap:wrap}
 .lb{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 .vl{font-size:24px;font-weight:750;margin-top:3px}
-.track{position:relative;height:9px;border-radius:5px;background:#13202b;margin-top:6px}
+.track{position:relative;height:10px;border-radius:5px;background:#13202b;margin-top:7px}
 .fill{position:absolute;inset:0 auto 0 0;border-radius:5px}
+.plan{position:absolute;top:-4px;bottom:-4px;width:2px;background:#cbd5e1;box-shadow:0 0 7px rgba(255,255,255,.55)}
+.rail{position:relative;height:18px;border-radius:7px;background:#0e1720;overflow:hidden;margin-top:6px}
+.rail i{position:absolute;inset:0 auto 0 0;border-radius:7px}
 .ttl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.why{font-family:var(--mono);font-size:11.5px;color:var(--behind);margin-top:2px}
+.big{font-size:20px;font-weight:700;letter-spacing:-.02em}
+.chip{font-family:var(--mono);font-size:11.5px;background:#132330;border:1px solid #1f3546;color:#8fe7f5;padding:2px 8px;border-radius:7px;white-space:nowrap}
+.struck{text-decoration:line-through;text-decoration-color:var(--dead);color:var(--dim)}
+.empty{color:var(--muted);font-size:13.5px}
 .note{border-left:3px solid var(--ok);background:rgba(34,211,238,.06);padding:10px 13px;border-radius:0 11px 11px 0;font-size:13.5px;margin-top:11px}
 .note.warn{border-left-color:var(--gap);background:rgba(255,46,136,.06)}
 footer{color:var(--dim);font-size:12.5px;margin-top:20px}
 @media(max-width:520px){.flex{gap:16px}.vl{font-size:20px}}
 </style>
 <div class="wrap">
-<p class="eyebrow">Мостик · снимок ${stamp}</p>
+<p class="eyebrow">Мостик · снимок ${stamp} · неделя ${weekLabel(weekStart)}, осталось ${daysLeftInWeek(nowDate, weekStart)} дн</p>
 <h1>Где мы сейчас</h1>
+
+<div class="card">
+  <h2>Основные задачи недели</h2>
+  ${weekTasks.length === 0
+      ? `<div class="empty" style="margin-top:8px">На эту неделю ничего не выбрано — вкладка «Неделя» ждёт выбора.</div>`
+      : weekTasks.map((t) => {
+          const inDay = t.status === "today" || t.status === "doing";
+          const isDone = t.status === "done";
+          return `<div class="row">
+        <div class="ttl" style="white-space:normal">
+          <div${isDone ? ` class="struck"` : ""}>${esc(t.title)}</div>
+          <div class="num" style="font-size:11.5px;color:var(--muted);margin-top:2px">${[
+            t.project ? `${t.project.icon ?? ""} ${esc(t.project.title)}`.trim() : "без проекта",
+            t.estimateMin ? `${t.estimateMin} мин` : null,
+          ].filter(Boolean).join(" · ")}</div>
+        </div>
+        <span class="chip"${isDone ? ` style="color:var(--over)"` : ""}>${isDone ? "готово" : inDay ? "сегодня" : "в неделе"}</span>
+      </div>`;
+        }).join("")}
+
+  ${stones.length ? `<div style="font-size:12.5px;color:var(--muted);margin:13px 0 3px">Три камня недели:</div>
+  ${stones.map((s) => `<div class="row" style="border-top:none;padding:4px 0">💎 <span class="ttl" style="white-space:normal">${esc(s)}</span></div>`).join("")}` : ""}
+  ${stopList.length ? `<div style="font-size:12.5px;color:var(--muted);margin:11px 0 3px">На этой неделе не делаю:</div>
+  ${stopList.map((s) => `<div class="row struck" style="border-top:none;padding:4px 0;font-size:13px">${esc(s)}</div>`).join("")}` : ""}
+</div>
+
+<div class="card">
+  <h2>Цели месяца</h2>
+  ${active.length === 0
+      ? `<div class="empty" style="margin-top:8px">Проекты месяца не выбраны.</div>`
+      : active.map((p) => `<div class="row" style="border-top:none;padding:5px 0">
+      <span style="flex:none">${p.icon ?? "•"}</span>
+      <span class="ttl" style="white-space:normal;${p.monthGoal ? "" : "color:var(--dim)"}">${esc(p.monthGoal ?? `${p.title} — цель месяца не задана`)}</span>
+    </div>`).join("")}
+</div>
+
+<p class="eyebrow" style="margin:20px 0 8px">что делаю сегодня</p>
+${mainTask
+      ? `<div class="card" style="border-color:rgba(34,211,238,.32)">
+  <div class="big">${esc(mainTask.title)}</div>
+  <div style="font-size:12.5px;color:var(--muted);margin-top:4px">${[
+        mainTask.status === "doing" ? "в работе" : "взята в день",
+        mainTask.estimateMin ? `${mainTask.estimateMin} мин` : null,
+      ].filter(Boolean).join(" · ")}</div>
+  ${mainTask.firstStep ? `<div style="font-size:13.5px;margin-top:7px">▶︎ ${esc(mainTask.firstStep)}</div>` : ""}
+  ${restToday.map((t) => `<div class="row"><span class="ttl">${esc(t.title)}</span></div>`).join("")}
+</div>`
+      : `<div class="card empty">Сегодня ничего не взято.</div>`}
 
 <div class="card">
   <div class="flex">
@@ -113,47 +192,45 @@ footer{color:var(--dim);font-size:12.5px;margin-top:20px}
   </div>
 </div>
 
+<p class="eyebrow" style="margin:20px 0 8px">месяц</p>
 <div class="card">
-  <div class="flex">
-    <div><div class="lb">Цель месяца</div><div class="vl num">${money(moneyMonth?.goalUsd ?? 0)}</div></div>
-    <div><div class="lb">Потенциал проектов</div><div class="vl num" style="color:var(--ok)">${money(potential)}</div></div>
-    <div><div class="lb">Факт</div><div class="vl num" style="color:var(--none)">${moneyMonth?.factUsd ? money(moneyMonth.factUsd) : "—"}</div></div>
+  <div class="flex" style="align-items:baseline">
+    <span class="num" style="font-size:13px">факт <b style="font-size:22px">${money(factUsd)}</b></span>
+    <span class="num" style="font-size:13px;color:var(--muted)">цель <b style="font-size:18px;color:var(--txt)">${money(goal)}</b></span>
+    ${gap > 0 ? `<span class="num" style="font-size:13px;color:var(--gap)">разрыв <b style="font-size:18px">${money(gap)}</b></span>` : ""}
   </div>
+  <div class="track" style="height:11px">
+    <div class="fill" style="width:${moneyPct}%;background:${moneyPct >= 100 ? "var(--over)" : "var(--ok)"}"></div>
+    <div class="plan" style="left:${monthProgress}%"></div>
+  </div>
+  <div class="num" style="font-size:11.5px;color:var(--muted);margin-top:6px">${moneyPct}% цели · календарь прошёл на ${monthProgress}%${potential ? ` · потенциал активных ${money(potential)} в мес` : ""}</div>
 </div>
 
 <div class="card">
-  <h2>Проекты месяца</h2>
-  <div style="font-size:12.5px;color:var(--muted);margin:2px 0 8px">цель, ведущее число и один следующий шаг</div>
-  ${[...projects].sort((a, b) => (a.status === "work" ? 0 : 1) - (b.status === "work" ? 0 : 1)).map((p) => {
-    const c = contracts.find((x) => x.projectId === p.id);
-    const act = p.status === "work";
-    return `<div class="row" style="align-items:flex-start;padding:12px 0;opacity:${act ? 1 : 0.65}">
-      ${MARK[act ? "ok" : "none"]}
-      <div class="ttl" style="white-space:normal">
-        <div style="font-weight:650;font-size:15px">${p.icon ?? ""} ${esc(p.title)}</div>
-        ${act ? `<div style="font-size:13px;margin-top:4px">🎯 ${esc(p.monthGoal ?? "цель месяца не задана")}</div>
-        ${c?.leadMetric ? `<div class="num" style="font-size:12.5px;color:var(--muted);margin-top:3px">📈 ${esc(c.leadMetric)}: <b style="color:var(--ok)">${c.leadFact}</b>${c.leadTarget ? ` из ${c.leadTarget} за неделю` : ""}</div>` : ""}
-        <div style="font-size:13px;margin-top:3px">➡️ ${esc(p.nextStep ?? "следующий шаг не задан")}</div>` : `<div style="font-size:12.5px;color:var(--dim);margin-top:3px">не взят в месяц</div>`}
-      </div>
-      <span class="num" style="font-size:12.5px;color:${p.potentialUsd ? "var(--ok)" : "var(--none)"}">${p.potentialUsd ? money(p.potentialUsd) + " / мес" : "цифры нет"}</span>
-    </div>`;
-  }).join("")}
+  <h2>Дорожки месяца</h2>
+  ${rows.length === 0
+      ? `<div class="empty" style="margin-top:8px">Активных проектов нет.</div>`
+      : rows.map(({ p, c, pct, signal, silent }) => `<div style="padding:9px 0;border-top:1px solid var(--line)">
+    <div style="display:flex;gap:10px;align-items:center">
+      ${MARK[signal]}
+      <span class="ttl" style="font-weight:600">${p.icon ?? ""} ${esc(p.title)}</span>
+      <span class="num" style="font-size:11.5px;color:${COLOR[signal]}">${
+        c?.leadMetric ? `${c.leadFact} / ${c.leadTarget ?? "—"} ${esc(c.leadMetric)}` : silent === null ? "фактов нет" : `молчит ${silent} дн`
+      }</span>
+    </div>
+    <div class="rail"><i style="width:${Math.max(pct, 4)}%;background:${COLOR[signal]};box-shadow:0 0 12px ${COLOR[signal]}55"></i></div>
+    <div style="font-size:12.5px;margin-top:6px;${p.nextStep ? "" : "color:var(--dim)"}">➡️ ${esc(p.nextStep ?? "следующий шаг не задан")}</div>
+  </div>`).join("")}
 </div>
 
 <div class="card">
-  <h2>Мелочёвка и входящие</h2>
-  <div class="flex" style="margin:10px 0 0;gap:20px">
+  <h2>Мелочёвка</h2>
+  <div class="flex" style="margin-top:10px;gap:20px">
     <span class="num">всего <b style="font-size:19px">${total}</b></span>
     <span class="num" style="color:var(--behind)">в инбоксе <b style="font-size:19px">${inbox}</b></span>
     <span class="num" style="color:var(--over)">закрыто <b style="font-size:19px">${done}</b></span>
-    <span class="num" style="color:var(--gap)">без дня <b style="font-size:19px">${noDay}</b></span>
   </div>
-  <div class="note warn">Из ${total} задач ${inbox} лежат в инбоксе, у ${noDay} нет дня.</div>
-  <div style="font-size:12.5px;color:var(--muted);margin:12px 0 4px">Дольше всех ждут:</div>
-  ${oldest.map((t) => {
-    const sig = signalBySilence(t.age);
-    return `<div class="row">${MARK[sig]}<span class="ttl">${esc(t.title)}</span><span class="num" style="font-size:12.5px;color:${SIGNALS[sig].color.replace("var(--s-", "var(--").replace(")", ")")}">${t.age} дн</span></div>`;
-  }).join("")}
+  <div class="note${inbox > 50 ? " warn" : ""}">Мелочёвка живёт на вкладке «День» и открывается после основного — на главный экран она не поднимается.</div>
 </div>
 
 <footer>Это снимок на ${stamp}, кнопки в нём не работают. Живая версия с кнопками — на маке, порт 8793.</footer>
@@ -161,7 +238,7 @@ footer{color:var(--dim);font-size:12.5px;margin-top:20px}
 
   writeFileSync(out, html, "utf8");
   console.log(`Снимок готов: ${out} (${Math.round(html.length / 1024)} КБ)`);
-  console.log(`В нём: ${total} задач, ${projects.length} проектов, серия ${streak.days}`);
+  console.log(`В нём: неделя ${weekTasks.length} задач, месяц ${active.length} проектов, серия ${streak.days}`);
 }
 
 main()
