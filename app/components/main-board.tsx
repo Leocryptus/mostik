@@ -135,7 +135,7 @@ export function MainBoard({ tasks, goals }: { tasks: MainTask[]; goals: MonthGoa
 
       {/* предложение обмена, если день уже полон */}
       {swap && (
-        <div className="card" style={{ marginBottom: 13, borderColor: "rgba(251,191,36,.4)" }}>
+        <div className="card" style={{ marginBottom: 13, borderColor: "var(--edge-warn)" }}>
           <div style={{ fontSize: 14, marginBottom: 8 }}>{swap.message}</div>
           {swap.options.map((o) => (
             <div
@@ -188,7 +188,7 @@ export function MainBoard({ tasks, goals }: { tasks: MainTask[]; goals: MonthGoa
           </div>
         ) : (
           <>
-            <div className="card" style={{ marginBottom: 11, borderColor: "rgba(34,211,238,.32)" }}>
+            <div className="card" style={{ marginBottom: 11, borderColor: "var(--edge-ok)" }}>
               <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-.02em", marginBottom: 5 }}>{main.title}</div>
               <div style={{ fontSize: 12.5, color: "var(--muted)" }}>
                 {[

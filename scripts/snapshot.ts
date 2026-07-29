@@ -22,18 +22,18 @@ const money = (n: number) => "$" + n.toLocaleString("ru-RU").replace(/,/g, " ");
 const esc = (s: string) => s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[c]!);
 /** цвета сигналов в снимке свои: переменных --s-* здесь нет */
 const COLOR: Record<string, string> = {
-  ok: "#22d3ee", over: "#34d399", behind: "#fbbf24",
-  gap: "#ff2e88", dead: "#f43f5e", frozen: "#818cf8", none: "#64748b",
+  ok: "#00ff9c", over: "#a3e635", behind: "#f5c542",
+  gap: "#ff7a45", dead: "#f87171", frozen: "#6ea8ff", none: "#5a7a6b",
 };
 
 const MARK: Record<string, string> = {
-  ok: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="#22d3ee"/></svg>`,
-  over: `<svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 0l6 10H0z" fill="#34d399"/></svg>`,
-  behind: `<svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="4" width="10" height="4" rx="1" fill="#fbbf24"/></svg>`,
-  gap: `<svg width="12" height="12" viewBox="0 0 12 12"><path d="M1 6h3l2-4 2 8 2-4h1" stroke="#ff2e88" stroke-width="1.6" fill="none"/></svg>`,
-  dead: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="none" stroke="#f43f5e" stroke-width="2"/><circle cx="6" cy="6" r="1.6" fill="#f43f5e"/></svg>`,
-  frozen: `<svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 1v10M1.5 3.5l9 5M10.5 3.5l-9 5" stroke="#818cf8" stroke-width="1.5"/></svg>`,
-  none: `<svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6h8" stroke="#64748b" stroke-width="2" stroke-dasharray="2 2"/></svg>`,
+  ok: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="#00ff9c"/></svg>`,
+  over: `<svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 0l6 10H0z" fill="#a3e635"/></svg>`,
+  behind: `<svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="4" width="10" height="4" rx="1" fill="#f5c542"/></svg>`,
+  gap: `<svg width="12" height="12" viewBox="0 0 12 12"><path d="M1 6h3l2-4 2 8 2-4h1" stroke="#ff7a45" stroke-width="1.6" fill="none"/></svg>`,
+  dead: `<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="none" stroke="#f87171" stroke-width="2"/><circle cx="6" cy="6" r="1.6" fill="#f87171"/></svg>`,
+  frozen: `<svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 1v10M1.5 3.5l9 5M10.5 3.5l-9 5" stroke="#6ea8ff" stroke-width="1.5"/></svg>`,
+  none: `<svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6h8" stroke="#5a7a6b" stroke-width="2" stroke-dasharray="2 2"/></svg>`,
 };
 
 async function main() {
@@ -98,12 +98,12 @@ async function main() {
 
   const html = `<title>Мостик — снимок ${stamp}</title>
 <style>
-:root{--bg:#070c12;--card:#0b1117;--line:#16222e;--txt:#e8f4f8;--muted:#7d93a1;--dim:#546b7c;
---ok:#22d3ee;--over:#34d399;--behind:#fbbf24;--gap:#ff2e88;--dead:#f43f5e;--none:#64748b;
+:root{--bg:#050807;--card:#0a120e;--line:#16261e;--txt:#eafff4;--muted:#7c9a8b;--dim:#4e6b5c;
+--ok:#00ff9c;--over:#a3e635;--behind:#f5c542;--gap:#ff7a45;--dead:#f87171;--none:#5a7a6b;
 --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;--sans:-apple-system,"Helvetica Neue",system-ui,sans-serif}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.6 var(--sans);-webkit-font-smoothing:antialiased;
-background-image:radial-gradient(620px 240px at 14% 0,rgba(34,211,238,.14),transparent 66%),radial-gradient(560px 220px at 84% 4%,rgba(255,46,136,.09),transparent 64%)}
+background-image:radial-gradient(620px 240px at 86% 0,rgba(0,255,156,.15),transparent 64%),radial-gradient(460px 190px at 10% 6%,rgba(0,255,156,.07),transparent 62%)}
 .wrap{max-width:900px;margin:0 auto;padding:34px 18px 70px}
 .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
 .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin:0 0 9px}
@@ -114,18 +114,18 @@ h2{font-size:17px;margin:0}
 .flex{display:flex;gap:24px;flex-wrap:wrap}
 .lb{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 .vl{font-size:24px;font-weight:750;margin-top:3px}
-.track{position:relative;height:10px;border-radius:5px;background:#13202b;margin-top:7px}
+.track{position:relative;height:10px;border-radius:5px;background:#12211a;margin-top:7px}
 .fill{position:absolute;inset:0 auto 0 0;border-radius:5px}
-.plan{position:absolute;top:-4px;bottom:-4px;width:2px;background:#cbd5e1;box-shadow:0 0 7px rgba(255,255,255,.55)}
-.rail{position:relative;height:18px;border-radius:7px;background:#0e1720;overflow:hidden;margin-top:6px}
+.plan{position:absolute;top:-4px;bottom:-4px;width:2px;background:#d6f5e6;box-shadow:0 0 7px rgba(255,255,255,.55)}
+.rail{position:relative;height:18px;border-radius:7px;background:#0d1813;overflow:hidden;margin-top:6px}
 .rail i{position:absolute;inset:0 auto 0 0;border-radius:7px}
 .ttl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .big{font-size:20px;font-weight:700;letter-spacing:-.02em}
-.chip{font-family:var(--mono);font-size:11.5px;background:#132330;border:1px solid #1f3546;color:#8fe7f5;padding:2px 8px;border-radius:7px;white-space:nowrap}
+.chip{font-family:var(--mono);font-size:11.5px;background:#0f2018;border:1px solid #1c3427;color:#7bffc9;padding:2px 8px;border-radius:7px;white-space:nowrap}
 .struck{text-decoration:line-through;text-decoration-color:var(--dead);color:var(--dim)}
 .empty{color:var(--muted);font-size:13.5px}
-.note{border-left:3px solid var(--ok);background:rgba(34,211,238,.06);padding:10px 13px;border-radius:0 11px 11px 0;font-size:13.5px;margin-top:11px}
-.note.warn{border-left-color:var(--gap);background:rgba(255,46,136,.06)}
+.note{border-left:3px solid var(--ok);background:rgba(0,255,156,.06);padding:10px 13px;border-radius:0 11px 11px 0;font-size:13.5px;margin-top:11px}
+.note.warn{border-left-color:var(--gap);background:rgba(255,122,69,.07)}
 footer{color:var(--dim);font-size:12.5px;margin-top:20px}
 @media(max-width:520px){.flex{gap:16px}.vl{font-size:20px}}
 </style>

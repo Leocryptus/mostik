@@ -83,7 +83,7 @@ export function MonthBoard({ projects }: { projects: ProjectCard[] }) {
   return (
     <>
       {active.length === 0 && (
-        <div className="card" style={{ marginBottom: 14, borderColor: "rgba(251,191,36,.35)" }}>
+        <div className="card" style={{ marginBottom: 14, borderColor: "var(--edge-warn)" }}>
           <div style={{ fontSize: 17, fontWeight: 650, marginBottom: 4 }}>Проекты месяца ещё не выбраны</div>
           <div style={{ color: "var(--muted)", fontSize: 13.5 }}>
             Отметь три-пять, за которые рубишься этот месяц. По каждому задай цель, ведущее число и один следующий шаг —
@@ -93,7 +93,7 @@ export function MonthBoard({ projects }: { projects: ProjectCard[] }) {
       )}
 
       {swap && (
-        <div className="card" style={{ marginBottom: 14, borderColor: "rgba(251,191,36,.4)" }}>
+        <div className="card" style={{ marginBottom: 14, borderColor: "var(--edge-warn)" }}>
           <div style={{ fontSize: 14, marginBottom: 8 }}>{swap.message}</div>
           {swap.options.map((o) => (
             <div key={o.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "7px 0", borderTop: "1px solid var(--line)", fontSize: 13.5 }}>
@@ -113,7 +113,7 @@ export function MonthBoard({ projects }: { projects: ProjectCard[] }) {
           const pct = p.leadTarget ? Math.min(100, Math.round((p.leadFact / p.leadTarget) * 100)) : 0;
 
           return (
-            <div key={p.id} className="card" style={{ borderColor: "rgba(34,211,238,.28)" }}>
+            <div key={p.id} className="card" style={{ borderColor: "var(--edge-ok)" }}>
               <div style={{ display: "flex", gap: 13, alignItems: "flex-start" }}>
                 <Ring percent={pct} color={SIGNALS[p.signal].color} label={p.leadTarget ? `${p.leadFact}/${p.leadTarget}` : "—"} />
 

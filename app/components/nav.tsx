@@ -28,7 +28,7 @@ export function Nav({ active }: { active: NavKey }) {
               padding: "7px 14px",
               borderRadius: 10,
               textDecoration: "none",
-              color: on ? "#04161c" : "var(--muted)",
+              color: on ? "var(--on-acc)" : "var(--muted)",
               background: on ? "var(--s-ok)" : "transparent",
               border: `1px solid ${on ? "transparent" : "var(--line)"}`,
               fontWeight: on ? 650 : 400,

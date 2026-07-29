@@ -118,7 +118,7 @@ export function DayBoard() {
 
       {/* главная задача дня */}
       {top ? (
-        <div className="card" style={{ marginBottom: 14, borderColor: "rgba(34,211,238,.35)" }}>
+        <div className="card" style={{ marginBottom: 14, borderColor: "var(--edge-ok)" }}>
           <div className="num" style={{ fontSize: 10.5, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--s-ok)" }}>
             Главная задача дня
           </div>
@@ -175,7 +175,7 @@ export function DayBoard() {
 
       {/* предложение обмена при переборе лимита */}
       {swap && (
-        <div className="card" style={{ marginBottom: 14, borderColor: "rgba(251,191,36,.4)" }}>
+        <div className="card" style={{ marginBottom: 14, borderColor: "var(--edge-warn)" }}>
           <div style={{ fontSize: 14, marginBottom: 8 }}>{swap.message}</div>
           {swap.options.map((o) => (
             <div key={o.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "7px 0", borderTop: "1px solid var(--line)", fontSize: 13.5 }}>
