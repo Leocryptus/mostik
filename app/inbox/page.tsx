@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { DayBoard } from "@/app/components/day-board";
+import { Nav } from "@/app/components/nav";
 
 export const dynamic = "force-dynamic";
 
@@ -17,11 +18,12 @@ export default async function InboxPage() {
   return (
     <main style={{ maxWidth: 860, margin: "0 auto", padding: "36px 18px 80px" }}>
       <p className="num" style={{ fontSize: 11, letterSpacing: ".16em", textTransform: "uppercase", color: "var(--dim)", margin: "0 0 9px" }}>
-        <a href="/" style={{ color: "var(--dim)" }}>← мостик</a> · инбокс
+        сбор дня
       </p>
-      <h1 style={{ fontSize: 30, letterSpacing: "-.035em", lineHeight: 1.06, margin: "0 0 8px" }}>Мелочёвка и входящие</h1>
+      <Nav active="day" />
+      <h1 style={{ fontSize: 26, letterSpacing: "-.035em", lineHeight: 1.06, margin: "0 0 8px" }}>Собрать день</h1>
       <p style={{ color: "var(--muted)", fontSize: 13.5, margin: "0 0 18px", maxWidth: "62ch" }}>
-        Всё, что не относится к проектам месяца. Система подняла наверх просроченное и залежавшееся — можно разобрать пачкой.
+        Выбери до трёх задач — утром они уже будут на главном экране. Система подняла наверх просроченное и залежавшееся.
       </p>
 
       <div className="card" style={{ marginBottom: 14, display: "flex", gap: 22, flexWrap: "wrap" }}>
