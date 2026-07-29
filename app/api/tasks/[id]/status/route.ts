@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { checkTakeToday, checkStartWork } from "@/lib/day";
+import { checkStartWork } from "@/lib/day";
+import { checkTakeStep } from "@/lib/simple";
 
 /**
  * Смена статуса задачи. Лимиты проверяются ЗДЕСЬ, на сервере:
@@ -28,7 +29,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   // ── лимиты ──
   if (status === "today" && task.status !== "today") {
     const count = await db.task.count({ where: { status: "today" } });
-    const check = checkTakeToday(count);
+    const check = checkTakeStep(count);
     if (!check.allowed) {
       const swap = await db.task.findMany({ where: { status: "today" }, select: { id: true, title: true } });
       return NextResponse.json({ error: check.reason, offerSwap: swap }, { status: 409 });

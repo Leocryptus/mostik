@@ -72,6 +72,7 @@ model Stream {
   signal     String   @default("ok") // ok | over | behind | gap | dead | frozen | none — кэш, считается от фактов
   nextStep   String?
   active     Boolean  @default(true)
+  sort       Int      @default(0) // порядок внутри задачи месяца
   createdAt  DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -99,7 +100,11 @@ model Task {
   delegated   Boolean   @default(false)
   legacyId    Int? // id в старом каноне leo-os-tasks.js
   legacyRaw   String? // исходная запись канона целиком — чтобы обратный экспорт не терял поля
-  weekStart   DateTime? // неделя, на которую задача выбрана основной (ТЗ §19.5)
+  weekStart   DateTime? // неделя, на которую задача выбрана основной (ТЗ §19.5, в простой версии не показывается)
+  // ── адекватизация: разбор записи инбокса (простая версия, §3) ──
+  becomesTrue String? // что конкретно станет правдой, когда сделаю
+  blocker     String? // что вероятнее всего помешает
+  adequacyAt  DateTime? // когда разобрана; пусто = лежит в инбоксе неразобранной
   projectId   String?
   streamId    String?
   personId    String?

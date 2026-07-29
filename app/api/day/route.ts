@@ -1,97 +1,62 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { rankCandidates, capacityState, streakFromDays, LIMITS, type Candidate } from "@/lib/day";
-import { weekStartOf, rankWeekCandidates, type WeekCandidate } from "@/lib/week";
+import { loadGoals } from "@/lib/goals";
+import { SIMPLE_LIMITS } from "@/lib/simple";
 
 /**
- * Состояние дня: что уже взято, из чего собирать и сколько влезет.
+ * День простой версии: что уже взято и из чего выбирать.
  *
- * Порядок сбора задан иерархией (ТЗ §19.5): день собирается ИЗ НЕДЕЛЬНЫХ задач,
- * а инбокс — это мелочёвка, которая открывается после основного. Поэтому
- * недельные и инбокс приходят двумя разными списками, а не одной кучей.
- *
- * Отсюда же кормится утренняя карточка в Telegram — одна ручка на все поверхности.
+ * Выбирать можно ТОЛЬКО из шагов подпроектов активных задач месяца — в этом
+ * вся суть иерархии. Инбокс в день не попадает: сначала разбор, потом работа.
  */
 export async function GET() {
-  const settings = await db.settings.findUnique({ where: { id: 1 } });
-  const capacity = settings?.dayCapacity ?? 180;
-  const freezes = settings?.freezesPerWeek ?? 2;
-
-  const now = Date.now();
-  const dayMs = 86_400_000;
-  const weekStart = weekStartOf(new Date());
+  const goals = (await loadGoals()).filter((g) => g.status === "work");
 
   const today = await db.task.findMany({
     where: { status: { in: ["today", "doing"] } },
-    orderBy: { isTopGoal: "desc" },
+    include: { project: { select: { title: true, icon: true } }, stream: { select: { title: true } } },
+    orderBy: [{ isTopGoal: "desc" }, { createdAt: "asc" }],
   });
 
-  // ── основное: задачи, выбранные на эту неделю и ещё не взятые в день ──
-  const weekly = await db.task.findMany({
-    where: { status: "inbox", weekStart },
-    include: { project: { select: { potentialUsd: true, hellYeah: true, title: true, icon: true } } },
-  });
+  const takenIds = new Set(today.map((t) => t.id));
 
-  const weeklyRanked = rankWeekCandidates(
-    weekly.map<WeekCandidate>((t) => ({
-      id: t.id,
-      title: t.title,
-      potentialUsd: t.project?.potentialUsd ?? undefined,
-      hellYeah: t.project?.hellYeah ?? undefined,
-      estimateMin: t.estimateMin ?? undefined,
-      overdueDays: t.due && t.due.getTime() < now ? Math.floor((now - t.due.getTime()) / dayMs) : 0,
-    })),
-  ).map((c) => {
-    const src = weekly.find((t) => t.id === c.id);
-    return {
-      ...c,
-      firstStep: src?.firstStep ?? null,
-      projectTitle: src?.project?.title ?? null,
-      projectIcon: src?.project?.icon ?? null,
-    };
-  });
-
-  // ── мелочёвка: остальной инбокс, недельные из него исключены ──
-  const inbox = await db.task.findMany({
-    where: { status: "inbox", OR: [{ weekStart: null }, { weekStart: { not: weekStart } }] },
-    include: { project: { select: { potentialUsd: true, hellYeah: true, title: true } } },
-    take: 200,
-  });
-
-  const candidates: Candidate[] = inbox.map((t) => ({
-    id: t.id,
-    title: t.title,
-    potentialUsd: t.project?.potentialUsd ?? undefined,
-    hellYeah: t.project?.hellYeah ?? undefined,
-    hoursCost: t.estimateMin ? t.estimateMin / 60 : 1,
-    overdueDays: t.due && t.due.getTime() < now ? Math.floor((now - t.due.getTime()) / dayMs) : 0,
-    ageDays: Math.floor((now - t.createdAt.getTime()) / dayMs),
-  }));
-
-  const facts = await db.activity.findMany({
-    where: { createdAt: { gte: new Date(now - 90 * dayMs) } },
-    select: { createdAt: true },
-  });
-
-  const plannedMin = today.reduce((s, t) => s + (t.estimateMin ?? 30), 0);
+  // доступные шаги, сгруппированные по задаче месяца — чтобы на экране было видно, ради чего
+  const available = goals
+    .map((g) => ({
+      goalId: g.id,
+      goalTitle: g.title,
+      goalIcon: g.icon,
+      state: g.state,
+      steps: [
+        ...g.subprojects.flatMap((s) =>
+          s.steps
+            .filter((t) => t.status === "inbox" && !takenIds.has(t.id))
+            .map((t) => ({ ...t, subTitle: s.title })),
+        ),
+        ...g.looseSteps
+          .filter((t) => t.status === "inbox" && !takenIds.has(t.id))
+          .map((t) => ({ ...t, subTitle: null as string | null })),
+      ],
+    }))
+    .filter((g) => g.steps.length > 0);
 
   return NextResponse.json({
-    limits: LIMITS,
+    limits: SIMPLE_LIMITS,
+    freeSlots: Math.max(0, SIMPLE_LIMITS.stepsPerDay - today.length),
     today: today.map((t) => ({
       id: t.id,
       title: t.title,
       status: t.status,
       isTopGoal: t.isTopGoal,
-      estimateMin: t.estimateMin,
       firstStep: t.firstStep,
-      fromWeek: t.weekStart?.getTime() === weekStart.getTime(),
+      becomesTrue: t.becomesTrue,
+      estimateMin: t.estimateMin,
+      goalTitle: t.project?.title ?? null,
+      goalIcon: t.project?.icon ?? null,
+      subTitle: t.stream?.title ?? null,
     })),
-    freeSlots: Math.max(0, LIMITS.tasksPerDay - today.length),
-    weekly: weeklyRanked,
-    weeklyTotal: weekly.length,
-    candidates: rankCandidates(candidates),
-    capacity: capacityState(plannedMin, capacity),
-    streak: streakFromDays(facts.map((f) => f.createdAt), new Date(), freezes),
-    inboxTotal: inbox.length,
+    available,
+    goalNames: goals.map((g) => ({ id: g.id, title: g.title, icon: g.icon, becomesTrue: g.becomesTrue })),
+    inboxTotal: await db.task.count({ where: { status: "inbox", adequacyAt: null } }),
   });
 }

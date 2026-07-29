@@ -1,20 +1,18 @@
 import Link from "next/link";
 
 /**
- * Вкладки в порядке приближения: сейчас → сегодня → неделя → месяц → склад проектов.
- * На главном — решения, на вкладках — работа (ТЗ §19.5).
+ * Три вкладки простой версии: что делаю сейчас · ради чего · что не разобрано.
+ * Задача месяца — подстраница «Месяца», отдельной вкладки не заводим.
  */
-export type NavKey = "main" | "day" | "week" | "month" | "projects";
+export type NavKey = "today" | "month" | "inbox";
 
 const ITEMS: { key: NavKey; href: string; label: string }[] = [
-  { key: "main", href: "/", label: "Главный" },
-  { key: "day", href: "/day", label: "День" },
-  { key: "week", href: "/week", label: "Неделя" },
+  { key: "today", href: "/", label: "Сегодня" },
   { key: "month", href: "/month", label: "Месяц" },
-  { key: "projects", href: "/projects", label: "Проекты" },
+  { key: "inbox", href: "/inbox", label: "Инбокс" },
 ];
 
-export function Nav({ active }: { active: NavKey }) {
+export function Nav({ active, inbox }: { active: NavKey; inbox?: number }) {
   return (
     <nav style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
       {ITEMS.map((i) => {
@@ -35,6 +33,11 @@ export function Nav({ active }: { active: NavKey }) {
             }}
           >
             {i.label}
+            {i.key === "inbox" && inbox ? (
+              <span className="num" style={{ marginLeft: 7, opacity: on ? 0.75 : 1, color: on ? "inherit" : "var(--s-behind)" }}>
+                {inbox}
+              </span>
+            ) : null}
           </Link>
         );
       })}
